@@ -1730,11 +1730,18 @@ class XianyuLive:
                 logger.info(f"【{self.cookie_id}】XianyuSliderStealth导入成功，使用滑块验证")
 
                 # 创建独立的滑块验证实例（每个用户独立实例，避免并发冲突）
+                # 从数据库获取是否显示浏览器的配置
+                show_browser = False
+                try:
+                    cookie_info = db_manager.get_cookie_details(self.cookie_id)
+                    show_browser = cookie_info.get('show_browser', False) if cookie_info else False
+                except Exception as e:
+                    logger.debug(f"【{self.cookie_id}】获取show_browser配置失败: {e}")
+
                 slider_stealth = XianyuSliderStealth(
-                    # user_id=f"{self.cookie_id}_{int(time.time() * 1000)}",  # 使用唯一ID避免冲突
                     user_id=f"{self.cookie_id}",  # 使用唯一ID避免冲突
                     enable_learning=True,  # 启用学习功能
-                    headless=True  # 使用有头模式（可视化浏览器）
+                    headless=not show_browser  # 根据数据库配置决定是否显示浏览器
                 )
 
                 # 在线程池中执行滑块验证
