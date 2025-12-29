@@ -1198,40 +1198,71 @@ class XianyuSliderStealth:
             return t
     
     def _generate_physics_trajectory(self, distance: float):
-        """基于物理加速度模型生成轨迹 - 极速模式
-        
+        """基于物理加速度模型生成轨迹 - 优化人类化模式
+
         优化策略：
-        1. 极少轨迹点（5-8步）：快速完成
-        2. 持续加速：一气呵成，不减速
-        3. 确保超调50%以上：保证滑动到位
-        4. 无回退：单向滑动
+        1. 适中轨迹点（12-18步）：更接近人类
+        2. 加速-匀速-减速：符合人类滑动习惯
+        3. 适度超调（10-30%）：更自然
+        4. 添加微小回退：模拟人类调整
         """
         trajectory = []
-        # 确保超调100%
-        target_distance = distance * random.uniform(2.0, 2.1)  # 超调100-110%
-        
-        # 极少步数（5-8步）
-        steps = random.randint(5, 8)
-        
-        # 极快时间间隔
-        base_delay = random.uniform(0.0002, 0.0005)
-        
-        # 生成轨迹点 - 直线加速
+        # 适度超调（10-30%）
+        overshoot_ratio = random.uniform(1.1, 1.3)
+        target_distance = distance * overshoot_ratio
+
+        # 适中步数（12-18步）
+        steps = random.randint(12, 18)
+
+        # 适中时间间隔
+        base_delay = random.uniform(0.008, 0.015)
+
+        # 分三个阶段：加速、匀速、减速
+        accel_phase = int(steps * 0.3)  # 前30%加速
+        uniform_phase = int(steps * 0.5)  # 中间50%匀速
+        decel_phase = steps - accel_phase - uniform_phase  # 后20%减速
+
+        current_distance = 0
+        velocity = 0
+        max_velocity = distance / (steps * base_delay * 0.6)
+
         for i in range(steps):
-            progress = (i + 1) / steps
-            
-            # 计算当前位置（使用平方加速曲线，越来越快）
-            x = target_distance * (progress ** 1.5)  # 加速曲线
-            
-            # 极小Y轴抖动
-            y = random.uniform(0, 2)
-            
-            # 极短延迟
-            delay = base_delay * random.uniform(0.9, 1.1)
-            
-            trajectory.append((x, y, delay))
-        
-        logger.info(f"【{self.pure_user_id}】极速模式：{len(trajectory)}步，超调100%+")
+            if i < accel_phase:
+                # 加速阶段
+                velocity += max_velocity / accel_phase
+                progress_factor = 1.2
+            elif i < accel_phase + uniform_phase:
+                # 匀速阶段
+                velocity = max_velocity * random.uniform(0.95, 1.05)
+                progress_factor = 1.0
+            else:
+                # 减速阶段
+                velocity *= 0.85
+                progress_factor = 0.8
+
+            # 计算移动距离
+            move_distance = velocity * base_delay * progress_factor
+            current_distance += move_distance
+
+            # 限制不超过目标距离太多
+            if current_distance > target_distance:
+                current_distance = target_distance
+
+            # Y轴自然抖动（更明显）
+            y = random.uniform(-3, 3) * (1 + abs(velocity) / max_velocity)
+
+            # 动态延迟
+            delay = base_delay * random.uniform(0.8, 1.2)
+
+            trajectory.append((current_distance, y, delay))
+
+        # 添加微小回退（模拟人类调整）
+        if random.random() < 0.6:  # 60%概率回退
+            pullback = distance * random.uniform(0.02, 0.05)
+            trajectory.append((current_distance - pullback, random.uniform(-2, 2), base_delay * 1.5))
+            trajectory.append((distance, random.uniform(-1, 1), base_delay * 1.2))
+
+        logger.info(f"【{self.pure_user_id}】优化模式：{len(trajectory)}步，超调{(overshoot_ratio-1)*100:.1f}%")
         return trajectory
     
     def generate_human_trajectory(self, distance: float):
@@ -2243,23 +2274,23 @@ class XianyuSliderStealth:
             logger.error(f"【{self.pure_user_id}】分析失败原因时出错: {e}")
             return {}
     
-    def solve_slider(self, max_retries: int = 3, fast_mode: bool = False):
-        """处理滑块验证（极速模式）
-        
+    def solve_slider(self, max_retries: int = 5, fast_mode: bool = False):
+        """处理滑块验证（优化模式）
+
         Args:
-            max_retries: 最大重试次数（默认3次，因为同一个页面连续失败3次后就不会成功了）
+            max_retries: 最大重试次数（增加到5次，提高成功率）
             fast_mode: 快速查找模式（当已确认滑块存在时使用，减少等待时间）
         """
         failure_records = []
-        current_strategy = 'ultra_fast'  # 极速策略
+        current_strategy = 'optimized'  # 优化策略
         
         for attempt in range(1, max_retries + 1):
             try:
                 logger.info(f"【{self.pure_user_id}】开始处理滑块验证... (第{attempt}/{max_retries}次尝试)")
                 
-                # 如果不是第一次尝试，短暂等待后重试
+                # 如果不是第一次尝试，等待更长时间后重试
                 if attempt > 1:
-                    retry_delay = random.uniform(0.5, 1.0)  # 减少等待时间
+                    retry_delay = random.uniform(1.5, 3.0)  # 增加等待时间，让页面稳定
                     logger.info(f"【{self.pure_user_id}】等待{retry_delay:.2f}秒后重试...")
                     time.sleep(retry_delay)
                     
