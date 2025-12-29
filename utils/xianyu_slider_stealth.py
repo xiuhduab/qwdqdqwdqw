@@ -332,7 +332,13 @@ class XianyuSliderStealth:
             
             # 随机选择浏览器特征
             browser_features = self._get_random_browser_features()
-            
+
+            # 🔑 Docker容器环境检测
+            import os
+            is_docker = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_ENV') == 'true'
+            if is_docker:
+                logger.info(f"【{self.pure_user_id}】检测到Docker容器环境，应用容器优化配置")
+
             # 启动浏览器，使用随机特征
             logger.info(f"【{self.pure_user_id}】启动浏览器，headless模式: {self.headless}")
             self.browser = self.playwright.chromium.launch(
@@ -389,9 +395,17 @@ class XianyuSliderStealth:
                     "--disable-search-engine-choice-screen",
                     "--unsafely-disable-devtools-self-xss-warnings",
                     "--edge-skip-compat-layer-relaunch",
-                    "--allow-pre-commit-input"
+                    "--allow-pre-commit-input",
+                    # 🔑 Docker容器特殊优化（条件添加）
+                    *([
+                        "--single-process",  # 单进程模式，减少资源占用
+                        "--disable-software-rasterizer",  # 禁用软件光栅化
+                    ] if is_docker else [])
                 ]
             )
+
+            if is_docker:
+                logger.info(f"【{self.pure_user_id}】已应用Docker容器专用浏览器参数")
             
             # 验证浏览器已启动
             if not self.browser or not self.browser.is_connected():
@@ -1207,15 +1221,15 @@ class XianyuSliderStealth:
         4. 添加微小回退：模拟人类调整
         """
         trajectory = []
-        # 适度超调（10-30%）
-        overshoot_ratio = random.uniform(1.1, 1.3)
+        # 🔑 降低超调比例（8-12%），更接近真实人类行为
+        overshoot_ratio = random.uniform(1.08, 1.12)
         target_distance = distance * overshoot_ratio
 
-        # 适中步数（12-18步）
-        steps = random.randint(12, 18)
+        # 🔑 增加步数（20-28步），使轨迹更自然
+        steps = random.randint(20, 28)
 
-        # 适中时间间隔
-        base_delay = random.uniform(0.008, 0.015)
+        # 🔑 调整时间间隔，保持总时长合理
+        base_delay = random.uniform(0.018, 0.028)
 
         # 分三个阶段：加速、匀速、减速
         accel_phase = int(steps * 0.3)  # 前30%加速
@@ -1256,11 +1270,11 @@ class XianyuSliderStealth:
 
             trajectory.append((current_distance, y, delay))
 
-        # 添加微小回退（模拟人类调整）
-        if random.random() < 0.6:  # 60%概率回退
-            pullback = distance * random.uniform(0.02, 0.05)
-            trajectory.append((current_distance - pullback, random.uniform(-2, 2), base_delay * 1.5))
-            trajectory.append((distance, random.uniform(-1, 1), base_delay * 1.2))
+        # 添加微小回退（模拟人类调整）- 增加回退概率和幅度
+        if random.random() < 0.75:  # 75%概率回退
+            pullback = distance * random.uniform(0.03, 0.06)
+            trajectory.append((current_distance - pullback, random.uniform(-2, 2), base_delay * 1.8))
+            trajectory.append((distance, random.uniform(-1, 1), base_delay * 1.5))
 
         logger.info(f"【{self.pure_user_id}】优化模式：{len(trajectory)}步，超调{(overshoot_ratio-1)*100:.1f}%")
         return trajectory
@@ -1296,8 +1310,8 @@ class XianyuSliderStealth:
         try:
             logger.info(f"【{self.pure_user_id}】开始优化滑动模拟...")
             
-            # 等待页面稳定
-            time.sleep(random.uniform(0.1, 0.3))
+            # 等待页面稳定（增加等待时间）
+            time.sleep(random.uniform(0.3, 0.5))
             
             # 获取滑块按钮中心位置
             button_box = slider_button.bounding_box()
@@ -1340,33 +1354,39 @@ class XianyuSliderStealth:
             
             # 第三阶段：按下鼠标
             try:
-                self.page.mouse.move(start_x, start_y)
-                time.sleep(random.uniform(0.05, 0.15))
+                # 🔑 Docker容器优化：确保鼠标精确定位到按钮中心
+                self.page.mouse.move(start_x, start_y, steps=1)
+                time.sleep(random.uniform(0.1, 0.2))
+
+                # 🔑 Docker容器优化：使用更可靠的按下方式
                 self.page.mouse.down()
-                time.sleep(random.uniform(0.05, 0.15))
+                time.sleep(random.uniform(0.15, 0.25))  # 增加按下后的等待时间
+
+                logger.debug(f"【{self.pure_user_id}】鼠标已按下，准备开始滑动")
             except Exception as e:
                 logger.error(f"【{self.pure_user_id}】按下鼠标失败: {e}")
                 return False
-            
+
             # 第四阶段：执行滑动轨迹
             try:
                 start_time = time.time()
                 current_x = start_x
                 current_y = start_y
-                
+
                 # 执行拖动轨迹
                 for i, (x, y, delay) in enumerate(trajectory):
                     # 更新当前位置
                     current_x = start_x + x
                     current_y = start_y + y
-                    
-                    # 移动鼠标
+
+                    # 🔑 Docker容器优化：减少steps参数，使移动更流畅
+                    # 在容器环境中，过多的steps可能导致轨迹不连贯
                     self.page.mouse.move(
                         current_x,
                         current_y,
-                        steps=random.randint(1, 3)
+                        steps=1  # 改为1步，让轨迹更连贯
                     )
-                    
+
                     # 延迟（添加微小随机变化）
                     actual_delay = delay * random.uniform(0.9, 1.1)
                     time.sleep(actual_delay)
@@ -1393,13 +1413,19 @@ class XianyuSliderStealth:
                     pause_duration = random.uniform(0.3, 0.5)
                     logger.warning(f"【{self.pure_user_id}】🎨 刮刮乐模式：在目标位置停顿{pause_duration:.2f}秒观察...")
                     time.sleep(pause_duration)
-                
+
+                # 🔑 Docker容器优化：释放鼠标前增加等待时间
+                time.sleep(random.uniform(0.1, 0.2))  # 增加等待时间，让滑块状态稳定
+
                 # 释放鼠标
-                time.sleep(random.uniform(0.02, 0.05))
                 self.page.mouse.up()
-                time.sleep(random.uniform(0.01, 0.03))
-                
-                # 触发click事件
+
+                # 🔑 Docker容器优化：释放后等待更长时间，让验证结果生效
+                time.sleep(random.uniform(0.2, 0.3))
+
+                logger.debug(f"【{self.pure_user_id}】鼠标已释放，等待验证结果...")
+
+                # 触发click事件（某些情况下需要）
                 try:
                     slider_button.evaluate(f"""
                         (slider) => {{
@@ -1847,17 +1873,39 @@ class XianyuSliderStealth:
                         try:
                             slider_container.click(timeout=1000)
                             logger.info(f"【{self.pure_user_id}】已点击滑块容器以激活frame")
-                            time.sleep(0.3)  # 等待轨道出现
+                            time.sleep(0.5)  # 增加等待时间，让DOM稳定
                         except:
                             pass
                     elif slider_button:
                         try:
                             slider_button.click(timeout=1000)
                             logger.info(f"【{self.pure_user_id}】已点击滑块按钮以激活frame")
-                            time.sleep(0.3)  # 等待轨道出现
+                            time.sleep(0.5)  # 增加等待时间，让DOM稳定
                         except:
                             pass
-                    
+
+                    # 🔑 关键修复：点击后重新获取按钮元素（因为DOM可能重新渲染）
+                    logger.info(f"【{self.pure_user_id}】点击后重新获取滑块按钮元素...")
+                    slider_button = None
+                    for selector in button_selectors:
+                        try:
+                            element = track_search_frame.query_selector(selector)
+                            if element:
+                                try:
+                                    if element.is_visible():
+                                        logger.info(f"【{self.pure_user_id}】重新找到滑块按钮: {selector}")
+                                        slider_button = element
+                                        break
+                                except:
+                                    logger.info(f"【{self.pure_user_id}】重新找到滑块按钮（无法检查可见性）: {selector}")
+                                    slider_button = element
+                                    break
+                        except:
+                            continue
+
+                    if not slider_button:
+                        logger.warning(f"【{self.pure_user_id}】点击后无法重新获取按钮元素")
+
                     # 再次在同一个frame中查找轨道
                     for selector in track_selectors:
                         try:
@@ -2054,8 +2102,9 @@ class XianyuSliderStealth:
                 target_frame = self.page
                 logger.info(f"【{self.pure_user_id}】在主页面检查验证结果")
             
-            # 等待一小段时间让验证结果出现
-            time.sleep(0.3)
+            # 🔑 Docker容器优化：等待更长时间让验证结果出现
+            # 容器环境中网络和渲染可能较慢
+            time.sleep(0.8)  # 从0.3秒增加到0.8秒
             
             # 核心逻辑：首先检查frame容器状态
             # 如果容器消失，直接返回成功；如果容器还在，检查失败提示
@@ -2290,7 +2339,7 @@ class XianyuSliderStealth:
                 
                 # 如果不是第一次尝试，等待更长时间后重试
                 if attempt > 1:
-                    retry_delay = random.uniform(1.5, 3.0)  # 增加等待时间，让页面稳定
+                    retry_delay = random.uniform(2.5, 4.0)  # 增加等待时间，让页面充分稳定
                     logger.info(f"【{self.pure_user_id}】等待{retry_delay:.2f}秒后重试...")
                     time.sleep(retry_delay)
                     
